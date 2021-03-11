@@ -19,8 +19,15 @@ var bind = function bind(obj) {
 };
 Function.prototype.bind = Function.prototype.bind || bind ;
 
+requirejs.config({
+  map: {
+    "*": {
+      "typeahead": "jquery-typeahead"
+    }
+  }
+})
 
-require([
+requirejs([
     'jquery',
     'contents',
     'base/js/namespace',
@@ -29,9 +36,11 @@ require([
     'base/js/utils',
     'base/js/page',
     'base/js/events',
+    'base/js/promises',
     'auth/js/loginwidget',
     'notebook/js/maintoolbar',
     'notebook/js/pager',
+    'notebook/js/promises',
     'notebook/js/quickhelp',
     'notebook/js/menubar',
     'notebook/js/notificationarea',
@@ -42,7 +51,9 @@ require([
     'codemirror/lib/codemirror',
     'notebook/js/about',
     'notebook/js/searchandreplace',
-    'notebook/js/clipboard'
+    'notebook/js/clipboard',
+    'bidi/bidi',
+    'notebook/js/celltoolbarpresets/tags'
 ], function(
     $,
     contents_service,
@@ -52,9 +63,11 @@ require([
     utils,
     page,
     events,
+    promises,
     loginwidget,
     maintoolbar,
     pager,
+    nb_promises,
     quickhelp,
     menubar,
     notificationarea,
@@ -65,7 +78,8 @@ require([
     CodeMirror,
     about,
     searchandreplace,
-    clipboard
+    clipboard,
+    bidi
     ) {
     "use strict";
 
@@ -74,6 +88,7 @@ require([
     
     try{
         requirejs(['custom/custom'], function() {});
+        bidi.loadLocale();
     } catch(err) {
         console.log("Error processing custom.js. Logging and continuing");
         console.warn(err);
@@ -198,7 +213,7 @@ require([
 
     Object.defineProperty( IPython, 'actions', {
       get: function() {
-          console.warn('accessing "actions" on the global IPython/Jupyter is not recommended. Pass it to your objects contructors at creation time');
+          console.warn('accessing "actions" on the global IPython/Jupyter is not recommended. Pass it to your objects constructors at creation time');
           return acts;
       },
       enumerable: true,

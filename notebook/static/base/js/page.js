@@ -15,8 +15,8 @@ define([
         * header_div_selector: string
         * site_div_selector: string
         */
-        this.header_div_element = $(header_div_selector);
-        this.site_div_element = $(site_div_selector);
+        this.header_div_element = $(header_div_selector || 'div#header');
+        this.site_div_element = $(site_div_selector || 'div#site');
 
         this.bind_events();
     };
@@ -27,7 +27,7 @@ define([
         // - header change
         // - page load
         var _handle_resize = $.proxy(this._resize_site, this);
-        
+
         $(window).resize(_handle_resize);
 
         // On document ready, resize codemirror.
@@ -60,8 +60,6 @@ define([
         this.site_div_element.css('display', 'block');
         this._resize_site();
     };
-
-
 
     Page.prototype._resize_site = function(e) {
         /**

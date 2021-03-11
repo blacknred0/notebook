@@ -1,7 +1,7 @@
 // Copyright (c) Jupyter Development Team.
 // Distributed under the terms of the Modified BSD License.
 
-define(['jquery'], function($) {
+define(['jquery','base/js/i18n'], function($, i18n) {
     "use strict";
 
     /**
@@ -51,12 +51,12 @@ define(['jquery'], function($) {
      *      ]
      *
      *  @param list {List}
-     *      List of button of the group, with the following paramter for each :
+     *      List of button of the group, with the following parameter for each :
      *      @param list.label {string} text to show on button hover
      *      @param list.icon {string} icon to choose from [Font Awesome](http://fortawesome.github.io/Font-Awesome)
      *      @param list.callback {function} function to be called on button click
      *      @param [list.id] {String} id to give to the button
-     *  @param [group_id] {String} optionnal id to give to the group
+     *  @param [group_id] {String} optional id to give to the group
      *
      *
      *  for private usage, the key can also be strings starting with '<' and ending with '>' to inject custom element that cannot
@@ -92,14 +92,19 @@ define(['jquery'], function($) {
                     action = that.actions.get(el.action);
                     action_name = el.action
                 }
+                var title = el.label;
+                if(action && action.help) {
+                    title = i18n.msg._(action.help) || el.label;
+                }
                 var button  = $('<button/>')
                     .addClass('btn btn-default')
-                    .attr("title", el.label||action.help)
+                    .attr("aria-label", el.label)
+                    .attr("title", title)
                     .append(
                         $("<i/>").addClass(el.icon||(action||{icon:'fa-exclamation-triangle'}).icon).addClass('fa')
                     );
                 if (el.label) {
-                    var label = $('<span/>').text(el.label).addClass('toolbar-btn-label');
+                    var label = $('<span/>').text(i18n.msg._(el.label)).addClass('toolbar-btn-label');
                     button.append(label);
                 }
                 var id = el.id;

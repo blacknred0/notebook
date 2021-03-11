@@ -1,18 +1,19 @@
 // Copyright (c) Jupyter Development Team.
 // Distributed under the terms of the Modified BSD License.
 
-define(function(require){
+define([
+    'jquery',
+    'typeahead',
+    'base/js/i18n',
+    'notebook/js/quickhelp'
+],function($, typeahead, i18n, QH){
     "use strict";
-
-    var $ = require('jquery');
-    require('typeahead');
-    var QH = require("notebook/js/quickhelp");
 
     /**
      * Humanize the action name to be consumed by user.
-     * internaly the actions anem are of the form
+     * internally the actions anem are of the form
      * <namespace>:<description-with-dashes>
-     * we drop <namesapce> and replace dashes for space.
+     * we drop <namespace> and replace dashes for space.
      */
     var humanize_action_id = function(str) {
       return str.split(':')[1].replace(/-/g, ' ').replace(/_/g, '-');
@@ -37,26 +38,26 @@ define(function(require){
 
     var CommandPalette = function(notebook) {
         if(!notebook){
-          throw new Error("CommandPalette takes a notebook non-null mandatory arguement");
+          throw new Error("CommandPalette takes a notebook non-null mandatory argument");
         }
 
         // typeahead lib need a specific layout with specific class names.
         // the following just does that
         var form = $('<form/>');
-        var container = $('<div/>').addClass('typeahead-container');
-        var field = $('<div/>').addClass('typeahead-field');
+        var container = $('<div/>').addClass('typeahead__container');
+        var field = $('<div/>').addClass('typeahead__field');
         var input = $('<input/>').attr('type', 'search');
 
         field
           .append(
-            $('<span>').addClass('typeahead-query').append(
+            $('<span>').addClass('typeahead__query').append(
               input
             )
           )
           .append(
-            $('<span/>').addClass('typeahead-button').append(
+            $('<span/>').addClass('typeahead__button').append(
               $('<button/>').attr('type', 'submit').append(
-                $('<span/>').addClass('typeahead-search-icon')
+                $('<span/>').addClass('typeahead__search-icon')
               )
             )
           );
@@ -80,7 +81,7 @@ define(function(require){
         .modal({show: false, backdrop:true})
         .on('shown.bs.modal', function () {
               // click on button trigger de-focus on mouse up.
-              // or somethign like that.
+              // or something like that.
               setTimeout(function(){input.focus();}, 100);
         });
 
@@ -150,13 +151,25 @@ define(function(require){
             short = QH.humanize_sequence(short);
           }
 
+          var display_text;
+          if (action.cmd) {
+              display_text = i18n.msg._(action.cmd);
+          } else {
+              display_text = humanize_action_id(action_id);
+          }
+
+          var help = null;
+          if (action.help) {
+              help = i18n.msg._(action.help);
+          }
+          
           src[group].data.push({
-            display: humanize_action_id(action_id),
+            display: display_text,
             shortcut: short,
             mode_shortcut: get_mode_for_action_id(action_id, notebook),
             group: group,
             icon: action.icon,
-            help: action.help,
+            help: help,
             key: action_id,
           });
         }
@@ -164,11 +177,17 @@ define(function(require){
         // now src is the right structure for typeahead
 
         input.typeahead({
-          emptyTemplate: "No results found for <pre>{{query}}</pre>",
+          emptyTemplate: function(query) {
+            return $('<div>').text("No results found for ").append(
+                $('<code>').text(query)
+            );
+          },
           maxItem: 1e3,
           minLength: 0,
           hint: true,
-          group: ["group", "{{group}} command group"],
+          group: {
+            template:"{{group}} command group"
+          },
           searchOnFocus: true,
           mustSelectItem: true,
           template: '<i class="fa fa-icon {{icon}}"></i>{{display}}  <div title={{key}} class="pull-right {{mode_shortcut}}">{{shortcut}}</div>',

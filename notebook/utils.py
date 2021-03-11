@@ -3,26 +3,40 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 
-from __future__ import print_function
-
+import asyncio
+import concurrent.futures
 import ctypes
 import errno
+import inspect
 import os
+import socket
 import stat
 import sys
 from distutils.version import LooseVersion
 
-try:
-    from urllib.parse import quote, unquote, urlparse
-except ImportError:
-    from urllib import quote, unquote
-    from urlparse import urlparse
 
+from urllib.parse import quote, unquote, urlparse, urljoin
+from urllib.request import pathname2url
+# tornado.concurrent.Future is asyncio.Future
+# in tornado >=5 with Python 3
+from tornado.concurrent import Future as TornadoFuture
+from tornado import gen
 from ipython_genutils import py3compat
 
 # UF_HIDDEN is a stat flag not defined in the stat module.
 # It is used by BSD to indicate hidden files.
 UF_HIDDEN = getattr(stat, 'UF_HIDDEN', 32768)
+
+
+def exists(path):
+    """Replacement for `os.path.exists` which works for host mapped volumes
+    on Windows containers
+    """
+    try:
+        os.lstat(path)
+    except OSError:
+        return False
+    return True
 
 
 def url_path_join(*pieces):
@@ -58,10 +72,10 @@ def url2path(url):
     pieces = [ unquote(p) for p in url.split('/') ]
     path = os.path.join(*pieces)
     return path
-    
+
 def url_escape(path):
     """Escape special characters in a URL path
-    
+
     Turns '/foo bar/' into '/foo%20bar/'
     """
     parts = py3compat.unicode_to_str(path, encoding='utf8').split('/')
@@ -69,7 +83,7 @@ def url_escape(path):
 
 def url_unescape(path):
     """Unescape special characters in a URL path
-    
+
     Turns '/foo%20bar/' into '/foo bar/'
     """
     return u'/'.join([
@@ -77,7 +91,6 @@ def url_unescape(path):
         for p in py3compat.unicode_to_str(path, encoding='utf8').split('/')
     ])
 
-_win32_FILE_ATTRIBUTE_HIDDEN = 0x02
 
 def is_file_hidden_win(abs_path, stat_res=None):
     """Is a file hidden?
@@ -98,22 +111,15 @@ def is_file_hidden_win(abs_path, stat_res=None):
     if os.path.basename(abs_path).startswith('.'):
         return True
 
-    # check that dirs can be listed
-    if os.path.isdir(abs_path):
-        # can't trust os.access on Windows because it seems to always return True
-        try:
-            os.stat(abs_path)
-        except OSError:
-            # stat may fail on Windows junctions or non-user-readable dirs
-            return True
-
+    win32_FILE_ATTRIBUTE_HIDDEN = 0x02
     try:
         attrs = ctypes.windll.kernel32.GetFileAttributesW(
-            py3compat.cast_unicode(abs_path))
+            py3compat.cast_unicode(abs_path)
+        )
     except AttributeError:
         pass
     else:
-        if attrs > 0 and attrs & _win32_FILE_ATTRIBUTE_HIDDEN:
+        if attrs > 0 and attrs & win32_FILE_ATTRIBUTE_HIDDEN:
             return True
 
     return False
@@ -137,7 +143,7 @@ def is_file_hidden_posix(abs_path, stat_res=None):
     if os.path.basename(abs_path).startswith('.'):
         return True
 
-    if stat_res is None:
+    if stat_res is None or stat.S_ISLNK(stat_res.st_mode):
         try:
             stat_res = os.stat(abs_path)
         except OSError as e:
@@ -164,12 +170,16 @@ else:
 
 def is_hidden(abs_path, abs_root=''):
     """Is a file hidden or contained in a hidden directory?
-    
+
     This will start with the rightmost path element and work backwards to the
     given root to see if a path is hidden or in a hidden directory. Hidden is
-    determined by either name starting with '.' or the UF_HIDDEN flag as 
+    determined by either name starting with '.' or the UF_HIDDEN flag as
     reported by stat.
-    
+
+    If abs_path is the same directory as abs_root, it will be visible even if
+    that is a hidden folder. This only checks the visibility of files
+    and directories *within* abs_root.
+
     Parameters
     ----------
     abs_path : unicode
@@ -178,6 +188,9 @@ def is_hidden(abs_path, abs_root=''):
         The absolute path of the root directory in which hidden directories
         should be checked for.
     """
+    if os.path.normpath(abs_path) == os.path.normpath(abs_root):
+        return False
+
     if is_file_hidden(abs_path):
         return True
 
@@ -191,12 +204,12 @@ def is_hidden(abs_path, abs_root=''):
     # is_file_hidden() already checked the file, so start from its parent dir
     path = os.path.dirname(abs_path)
     while path and path.startswith(abs_root) and path != abs_root:
-        if not os.path.exists(path):
+        if not exists(path):
             path = os.path.dirname(path)
             continue
         try:
             # may fail on Windows junctions
-            st = os.stat(path)
+            st = os.lstat(path)
         except OSError:
             return True
         if getattr(st, 'st_flags', 0) & UF_HIDDEN:
@@ -244,7 +257,7 @@ def to_os_path(path, root=''):
 
 def to_api_path(os_path, root=''):
     """Convert a filesystem path to an API path
-    
+
     If given, root will be removed from the path.
     root must be a filesystem path already.
     """
@@ -269,13 +282,15 @@ def check_version(v, check):
         return True
 
 
-# Copy of IPython.utils.process.check_pid:
-
 def _check_pid_win32(pid):
     import ctypes
     # OpenProcess returns 0 if no such process (of ours) exists
     # positive int otherwise
-    return bool(ctypes.windll.kernel32.OpenProcess(1,0,pid))
+    handle = ctypes.windll.kernel32.OpenProcess(1,0,pid)
+    if handle:
+        # the handle must be closed or the kernel process object won't be freed
+        ctypes.windll.kernel32.CloseHandle( handle )
+    return bool(handle)
 
 def _check_pid_posix(pid):
     """Copy of IPython.utils.process.check_pid"""
@@ -295,3 +310,92 @@ if sys.platform == 'win32':
     check_pid = _check_pid_win32
 else:
     check_pid = _check_pid_posix
+
+
+def maybe_future(obj):
+    """Like tornado's deprecated gen.maybe_future
+
+    but more compatible with asyncio for recent versions
+    of tornado
+    """
+    if inspect.isawaitable(obj):
+        return asyncio.ensure_future(obj)
+    elif isinstance(obj, concurrent.futures.Future):
+        return asyncio.wrap_future(obj)
+    else:
+        # not awaitable, wrap scalar in future
+        f = asyncio.Future()
+        f.set_result(obj)
+        return f
+
+
+def run_sync(maybe_async):
+    """If async, runs maybe_async and blocks until it has executed,
+    possibly creating an event loop.
+    If not async, just returns maybe_async as it is the result of something
+    that has already executed.
+    Parameters
+    ----------
+    maybe_async : async or non-async object
+        The object to be executed, if it is async.
+    Returns
+    -------
+    result :
+        Whatever the async object returns, or the object itself.
+    """
+    if not inspect.isawaitable(maybe_async):
+        # that was not something async, just return it
+        return maybe_async
+    # it is async, we need to run it in an event loop
+
+    def wrapped():
+        create_new_event_loop = False
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            create_new_event_loop = True
+        else:
+            if loop.is_closed():
+                create_new_event_loop = True
+        if create_new_event_loop:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(maybe_async)
+        except RuntimeError as e:
+            if str(e) == 'This event loop is already running':
+                # just return a Future, hoping that it will be awaited
+                result = asyncio.ensure_future(maybe_async)
+        return result
+    return wrapped()
+
+
+def urlencode_unix_socket_path(socket_path):
+    """Encodes a UNIX socket path string from a socket path for the `http+unix` URI form."""
+    return socket_path.replace('/', '%2F')
+
+
+def urldecode_unix_socket_path(socket_path):
+    """Decodes a UNIX sock path string from an encoded sock path for the `http+unix` URI form."""
+    return socket_path.replace('%2F', '/')
+
+
+def urlencode_unix_socket(socket_path):
+    """Encodes a UNIX socket URL from a socket path for the `http+unix` URI form."""
+    return 'http+unix://%s' % urlencode_unix_socket_path(socket_path)
+
+
+def unix_socket_in_use(socket_path):
+    """Checks whether a UNIX socket path on disk is in use by attempting to connect to it."""
+    if not os.path.exists(socket_path):
+        return False
+
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(socket_path)
+    except socket.error:
+        return False
+    else:
+        return True
+    finally:
+        sock.close()

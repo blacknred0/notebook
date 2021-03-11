@@ -13,6 +13,7 @@ define([
     'jquery',
     'base/js/namespace',
     'base/js/utils',
+    'base/js/i18n',
     'base/js/keyboard',
     'services/config',
     'notebook/js/cell',
@@ -26,6 +27,7 @@ define([
     $,
     IPython,
     utils,
+    i18n,
     keyboard,
     configmod,
     cell,
@@ -50,25 +52,29 @@ define([
      * @private
      */
     CodeMirror.commands.delSpaceToPrevTabStop = function(cm){
-        var from = cm.getCursor(true), to = cm.getCursor(false), sel = !posEq(from, to);
-         if (sel) {
-            var ranges = cm.listSelections();
-            for (var i = ranges.length - 1; i >= 0; i--) {
-                var head = ranges[i].head;
-                var anchor = ranges[i].anchor;
-                cm.replaceRange("", CodeMirror.Pos(head.line, head.ch), CodeMirror.Pos(anchor.line, anchor.ch));
+        var tabSize = cm.getOption('tabSize');
+        var ranges = cm.listSelections(); // handle multicursor
+        for (var i = ranges.length - 1; i >= 0; i--) { // iterate reverse so any deletions don't overlap
+            var head = ranges[i].head;
+            var anchor = ranges[i].anchor;
+            var sel = !posEq(head, anchor);
+            if (sel) {
+                // range is selection
+                cm.replaceRange("", anchor, head);
+            } else {
+                // range is cursor
+                var line = cm.getLine(head.line).substring(0, head.ch);
+                if (line.match(/^\ +$/) !== null){
+                    // delete tabs
+                    var prevTabStop = (Math.ceil(head.ch/tabSize)-1)*tabSize;
+                    var from = CodeMirror.Pos(head.line, prevTabStop)
+                    cm.replaceRange("", from, head);
+                } else {
+                    // delete normally
+                    var from = cm.findPosH(head, -1,  'char', false);
+                    cm.replaceRange("", from, head);
+                }
             }
-            return;
-        }
-        var cur = cm.getCursor(), line = cm.getLine(cur.line);
-        var tabsize = cm.getOption('tabSize');
-        var chToPrevTabStop = cur.ch-(Math.ceil(cur.ch/tabsize)-1)*tabsize;
-        from = {ch:cur.ch-chToPrevTabStop,line:cur.line};
-        var select = cm.getRange(from,cur);
-        if( select.match(/^\ +$/) !== null){
-            cm.replaceRange("",from,cur);
-        } else {
-            cm.deleteH(-1,"char");
         }
     };
 
@@ -158,13 +164,25 @@ define([
 
         var input = $('<div></div>').addClass('input');
         this.input = input;
+
+        var prompt_container = $('<div/>').addClass('prompt_container');
+
+        var run_this_cell = $('<div></div>').addClass('run_this_cell');
+        run_this_cell.prop('title', 'Run this cell');
+        run_this_cell.append('<i class="fa-step-forward fa"></i>');
+        run_this_cell.click(function (event) {
+            event.stopImmediatePropagation();
+            that.execute();
+        });
+
         var prompt = $('<div/>').addClass('prompt input_prompt');
+        
         var inner_cell = $('<div/>').addClass('inner_cell');
         this.celltoolbar = new celltoolbar.CellToolbar({
             cell: this, 
             notebook: this.notebook});
         inner_cell.append(this.celltoolbar.element);
-        var input_area = $('<div/>').addClass('input_area');
+        var input_area = $('<div/>').addClass('input_area').attr("aria-label", i18n.msg._("Edit code here"));
         this.code_mirror = new CodeMirror(input_area.get(0), this._options.cm_config);
         // In case of bugs that put the keyboard manager into an inconsistent state,
         // ensure KM is enabled when CodeMirror is focused:
@@ -178,7 +196,8 @@ define([
         this.code_mirror.on('keydown', $.proxy(this.handle_keyevent,this));
         $(this.code_mirror.getInputField()).attr("spellcheck", "false");
         inner_cell.append(input_area);
-        input.append(prompt).append(inner_cell);
+        prompt_container.append(prompt).append(run_this_cell);
+        input.append(prompt_container).append(inner_cell);
 
         var output = $('<div></div>');
         cell.append(input).append(output);
@@ -201,6 +220,12 @@ define([
         this.element.focusout(
             function() { that.auto_highlight(); }
         );
+
+        this.events.on('kernel_restarting.Kernel', function() {
+            if (that.input_prompt_number === '*') {
+              that.set_input_prompt();
+            }
+        });
     };
 
 
@@ -228,7 +253,7 @@ define([
         }
 
         if (event.which === keycodes.down && event.type === 'keypress' && this.tooltip.time_before_tooltip >= 0) {
-            // triger on keypress (!) otherwise inconsistent event.which depending on plateform
+            // triger on keypress (!) otherwise inconsistent event.which depending on platform
             // browser and keyboard layout !
             // Pressing '(' , request tooltip, don't forget to reappend it
             // The second argument says to hide the tooltip if the docstring
@@ -305,12 +330,21 @@ define([
      */
     CodeCell.prototype.execute = function (stop_on_error) {
         if (!this.kernel) {
-            console.log("Can't execute cell since kernel is not set.");
+            console.log(i18n.msg._("Can't execute cell since kernel is not set."));
             return;
         }
 
         if (stop_on_error === undefined) {
-            stop_on_error = true;
+            if (this.metadata !== undefined && 
+                    this.metadata.tags !== undefined) {
+                if (this.metadata.tags.indexOf('raises-exception') !== -1) {
+                    stop_on_error = false;
+                } else {
+                    stop_on_error = true;
+                }
+            } else {
+               stop_on_error = true;
+            }
         }
 
         this.clear_output(false, true);
@@ -337,9 +371,9 @@ define([
         var that = this;
         function handleFinished(evt, data) {
             if (that.kernel.id === data.kernel.id && that.last_msg_id === data.msg_id) {
-            		that.events.trigger('finished_execute.CodeCell', {cell: that});
+                    that.events.trigger('finished_execute.CodeCell', {cell: that});
                 that.events.off('finished_iopub.Kernel', handleFinished);
-      	    }
+              }
         }
         this.events.on('finished_iopub.Kernel', handleFinished);
     };
@@ -467,7 +501,7 @@ define([
         } else {
             ns = encodeURIComponent(prompt_value);
         }
-        return '<bdi>In</bdi>&nbsp;[' + ns + ']:';
+        return '<bdi>'+i18n.msg._('In')+'</bdi>&nbsp;[' + ns + ']:';
     };
 
     CodeCell.input_prompt_continuation = function (prompt_value, lines_number) {
@@ -488,6 +522,7 @@ define([
         }
         this.input_prompt_number = number;
         var prompt_html = CodeCell.input_prompt_function(this.input_prompt_number, nline);
+
         // This HTML call is okay because the user contents are escaped.
         this.element.find('div.input_prompt').html(prompt_html);
         this.events.trigger('set_dirty.Notebook', {value: true});
@@ -578,7 +613,7 @@ define([
         return cont;
     };
 
-    // Backwards compatability.
+    // Backwards compatibility.
     IPython.CodeCell = CodeCell;
 
     return {'CodeCell': CodeCell};

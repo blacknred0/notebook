@@ -79,8 +79,11 @@ model. There are three model types: **notebook**, **file**, and **directory**.
 
 - ``file`` models
     - The ``format`` field is either ``"text"`` or ``"base64"``.
-    - The ``mimetype`` field is ``text/plain`` for text-format models and
-      ``application/octet-stream`` for base64-format models.
+    - The ``mimetype`` field can be any mimetype string, but defaults to 
+      ``text/plain`` for text-format models and
+      ``application/octet-stream`` for base64-format models. For files with
+      unknown mime types (e.g. unknown file extensions), this field may be
+      `None`.
     - The ``content`` field is always of type ``unicode``.  For text-format
       file models, ``content`` simply contains the file's bytes after decoding
       as UTF-8.  Non-text (``base64``) files are read as bytes, base64 encoded,
@@ -97,11 +100,13 @@ model. There are three model types: **notebook**, **file**, and **directory**.
    .. _contentfree:
 
    In certain circumstances, we don't need the full content of an entity to
-   complete a Contents API request.  In such cases, we omit the ``mimetype``,
-   ``content``, and ``format`` keys from the model. This most commonly occurs
-   when listing a directory, in which circumstance we represent files within
-   the directory as content-less models to avoid having to recursively traverse
-   and serialize the entire filesystem.
+   complete a Contents API request. In such cases, we omit the ``content``, and
+   ``format`` keys from the model. The default values for the ``mimetype``
+   field will might also not be evaluated, in which case it will be set as `None`.
+   This reduced reply most commonly occurs when listing a directory, in
+   which circumstance we represent files within the directory as content-less
+   models to avoid having to recursively traverse and serialize the entire
+   filesystem.
 
 **Sample Models**
 
@@ -191,12 +196,81 @@ methods:
    ContentsManager.dir_exists
    ContentsManager.is_hidden
 
+You may be required to specify a Checkpoints object, as the default one,
+``FileCheckpoints``, could be incompatible with your custom 
+ContentsManager.
+
+
+Chunked Saving
+~~~~~~~~~~~~~~
+
+The contents API allows for "chunked" saving of files, i.e.
+saving/transmitting in partial pieces:
+
+* This can only be used when the ``type`` of the model is ``file``.
+* The model should be as otherwise expected for
+  :meth:`~manager.ContentsManager.save`, with an added field ``chunk``.
+* The value of ``chunk`` should be an integer starting at ``1``, and incrementing
+  for each subsequent chunk, except for the final chunk, which should be
+  indicated with a value of ``-1``.
+* The model returned from using :meth:`~manager.ContentsManager.save` with
+  ``chunk`` should be treated as unreliable for all chunks except the final one.
+* Any interaction with a file being saved in a chunked manner is unreliable
+  until the final chunk has been saved. This includes directory listings.
+
 
 Customizing Checkpoints
 -----------------------
+.. currentmodule:: notebook.services.contents.checkpoints
 
-TODO:
+Customized Checkpoint definitions allows behavior to be 
+altered and extended.
 
+The ``Checkpoints`` and ``GenericCheckpointsMixin`` classes
+(from :mod:`notebook.services.contents.checkpoints`)
+have reusable code and are intended to be used together, 
+but require the following methods to be implemented.
+
+.. autosummary::
+   Checkpoints.rename_checkpoint
+   Checkpoints.list_checkpoints
+   Checkpoints.delete_checkpoint
+   GenericCheckpointsMixin.create_file_checkpoint
+   GenericCheckpointsMixin.create_notebook_checkpoint
+   GenericCheckpointsMixin.get_file_checkpoint
+   GenericCheckpointsMixin.get_notebook_checkpoint
+
+No-op example
+~~~~~~~~~~~~~
+
+Here is an example of a no-op checkpoints object - note the mixin
+comes first. The docstrings indicate what each method should do or 
+return for a more complete implementation.
+
+.. code-block:: python
+
+    class NoOpCheckpoints(GenericCheckpointsMixin, Checkpoints):
+        """requires the following methods:"""
+        def create_file_checkpoint(self, content, format, path):
+            """ -> checkpoint model"""
+        def create_notebook_checkpoint(self, nb, path):
+            """ -> checkpoint model"""
+        def get_file_checkpoint(self, checkpoint_id, path):
+            """ -> {'type': 'file', 'content': <str>, 'format': {'text', 'base64'}}"""
+        def get_notebook_checkpoint(self, checkpoint_id, path):
+            """ -> {'type': 'notebook', 'content': <output of nbformat.read>}"""
+        def delete_checkpoint(self, checkpoint_id, path):
+            """deletes a checkpoint for a file"""
+        def list_checkpoints(self, path):
+            """returns a list of checkpoint models for a given file, 
+            default just does one per file
+            """
+            return []
+        def rename_checkpoint(self, checkpoint_id, old_path, new_path):
+            """renames checkpoint from old path to new path"""
+
+See ``GenericFileCheckpoints`` in :mod:`notebook.services.contents.filecheckpoints`
+for a more complete example.
 
 Testing
 -------
@@ -216,4 +290,4 @@ ContentsManager.
 
 .. _NBFormat: https://nbformat.readthedocs.io/en/latest/index.html
 .. _PGContents: https://github.com/quantopian/pgcontents
-.. _PostgreSQL: http://www.postgresql.org/
+.. _PostgreSQL: https://www.postgresql.org/

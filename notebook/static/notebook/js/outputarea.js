@@ -4,12 +4,12 @@
 define([
     'jquery',
     'base/js/utils',
+    'base/js/i18n',
     'base/js/security',
     'base/js/keyboard',
+    'base/js/markdown',
     'services/config',
-    'notebook/js/mathjaxutils',
-    'components/marked/lib/marked',
-], function($, utils, security, keyboard, configmod, mathjaxutils, marked) {
+], function($, utils, i18n, security, keyboard, markdown, configmod) {
     "use strict";
 
     /**
@@ -54,7 +54,18 @@ define([
      **/
 
     OutputArea.prototype.create_elements = function () {
-        this.element = $("<div/>");
+        var element = this.element = $("<div/>");
+        // wrap element in safe trigger,
+        // so that errors (e.g. in widget extensions) are logged instead of
+        // breaking everything.
+        this.element._original_trigger = this.element.trigger;
+        this.element.trigger = function (name, data) {
+            try {
+                this._original_trigger.apply(this, arguments);
+            } catch (e) {
+                console.error("Exception in event handler for " + name, e, arguments);
+            }
+        }
         this.collapse_button = $("<div/>");
         this.prompt_overlay = $("<div/>");
         this.wrapper.append(this.prompt_overlay);
@@ -65,17 +76,19 @@ define([
 
     OutputArea.prototype.style = function () {
         this.collapse_button.hide();
-        this.prompt_overlay.hide();
+        if (!this.prompt_area) {
+            this.prompt_overlay.hide();
+        }
         
         this.wrapper.addClass('output_wrapper');
         this.element.addClass('output');
         
         this.collapse_button.addClass("btn btn-default output_collapsed");
-        this.collapse_button.attr('title', 'click to expand output');
+        this.collapse_button.attr('title', i18n.msg._('click to expand output'));
         this.collapse_button.text('. . .');
         
         this.prompt_overlay.addClass('out_prompt_overlay prompt');
-        this.prompt_overlay.attr('title', 'click to expand output; double click to hide output');
+        this.prompt_overlay.attr('title', i18n.msg._('click to expand output; double click to hide output'));
         
         this.expand();
     };
@@ -100,7 +113,7 @@ define([
         if (threshold <=0) {
             return false;
         }
-        // line-height from http://stackoverflow.com/questions/1185151
+        // line-height from https://stackoverflow.com/questions/1185151
         var fontSize = this.element.css('font-size') || '14px';
         var lineHeight = Math.floor((parseFloat(fontSize.replace('px','')) || 14) * 1.3);
         return (this.element.height() > threshold * lineHeight);
@@ -163,14 +176,14 @@ define([
 
     OutputArea.prototype.scroll_area = function () {
         this.element.addClass('output_scroll');
-        this.prompt_overlay.attr('title', 'click to unscroll output; double click to hide');
+        this.prompt_overlay.attr('title', i18n.msg._('click to unscroll output; double click to hide'));
         this.scrolled = true;
     };
 
 
     OutputArea.prototype.unscroll_area = function () {
         this.element.removeClass('output_scroll');
-        this.prompt_overlay.attr('title', 'click to scroll output; double click to hide');
+        this.prompt_overlay.attr('title', i18n.msg._('click to scroll output; double click to hide'));
         this.scrolled = false;
     };
 
@@ -251,6 +264,7 @@ define([
     var MIME_SVG = 'image/svg+xml';
     var MIME_PNG = 'image/png';
     var MIME_JPEG = 'image/jpeg';
+    var MIME_GIF = 'image/gif';
     var MIME_PDF = 'application/pdf';
     var MIME_TEXT = 'text/plain';
     
@@ -263,6 +277,7 @@ define([
         MIME_SVG,
         MIME_PNG,
         MIME_JPEG,
+        MIME_GIF,
         MIME_PDF,
         MIME_TEXT,
     ];
@@ -354,6 +369,7 @@ define([
     OutputArea.prototype.create_output_area = function () {
         var oa = $("<div/>").addClass("output_area");
         if (this.prompt_area) {
+            oa.append($('<div/>').addClass('run_this_cell'));
             oa.append($('<div/>').addClass('prompt'));
         }
         return oa;
@@ -372,6 +388,8 @@ define([
 
     OutputArea.prototype.create_output_subarea = function(md, classes, mime) {
         var subarea = $('<div/>').addClass('output_subarea').addClass(classes);
+        // Unforce RTL
+        subarea.attr("dir","auto");
         if (_get_metadata_key(md, 'isolated', mime)) {
             // Create an iframe to isolate the subarea from the rest of the
             // document
@@ -383,7 +401,7 @@ define([
             // Once the iframe is loaded, the subarea is dynamically inserted
             iframe.on('load', function() {
                 // Workaround needed by Firefox, to properly render svg inside
-                // iframes, see http://stackoverflow.com/questions/10177190/
+                // iframes, see https://stackoverflow.com/questions/10177190/
                 // svg-dynamically-added-to-iframe-does-not-render-correctly
                 this.contentDocument.open();
 
@@ -418,12 +436,12 @@ define([
         /**
          * display a message when a javascript error occurs in display output
          */
-        var msg = "Javascript error adding output!";
+        var msg = i18n.msg._("Javascript error adding output!");
         if ( element === undefined ) return;
         element
             .append($('<div/>').text(msg).addClass('js-error'))
             .append($('<div/>').text(err.toString()).addClass('js-error'))
-            .append($('<div/>').text('See your browser Javascript console for more details.').addClass('js-error'));
+            .append($('<div/>').text(i18n.msg._('See your browser Javascript console for more details.')).addClass('js-error'));
     };
     
     OutputArea.prototype._safe_append = function (toinsert, toreplace) {
@@ -445,6 +463,8 @@ define([
             // the prompt area and the proper indentation.
             toinsert = this.create_output_area();
             var subarea = $('<div/>').addClass('output_subarea');
+            // Unforce RTL
+            subarea.attr("dir","auto");
             toinsert.append(subarea);
             this._append_javascript_error(err, subarea);
             this.element.append(toinsert);
@@ -454,6 +474,11 @@ define([
         this.element.trigger('changed', {output_area: this});
     };
 
+    OutputArea.output_prompt_classical = function(prompt_value) {
+        return $('<bdi>').text(i18n.msg.sprintf(i18n.msg._('Out[%s]:'),prompt_value));
+    };
+
+    OutputArea.output_prompt_function = OutputArea.output_prompt_classical;
 
     OutputArea.prototype.append_execute_result = function (json) {
         var n = json.execution_count || ' ';
@@ -463,11 +488,7 @@ define([
             toinsert.find('div.prompt')
                     .addClass('output_prompt')
                     .empty()
-                    .append(
-                      $('<bdi>').text('Out')
-                    ).append(
-                      '[' + n + ']:'
-                    );
+                    .append(OutputArea.output_prompt_function(n));
         }
         var inserted = this.append_mime_type(json, toinsert);
         if (inserted) {
@@ -571,11 +592,13 @@ define([
         var that = this;
         var toinsert = this.create_output_area();
         var subarea = $('<div/>').addClass('output_subarea output_unrecognized');
+        // Unforce RTL
+        subarea.attr("dir","auto");
         toinsert.append(subarea);
         subarea.append(
             $("<a>")
                 .attr("href", "#")
-                .text("Unrecognized output: " + json.output_type)
+                .text(i18n.msg.sprintf(i18n.msg._("Unrecognized output: %s"),json.output_type))
                 .click(function () {
                     that.events.trigger('unrecognized_output.OutputArea', {output: json});
                 })
@@ -614,6 +637,10 @@ define([
             (json.data[MIME_MARKDOWN] !== undefined)) {
             this.typeset();
         }
+        this.events.trigger('output_updated.OutputArea', {
+            output: json,
+            output_area: this,
+        });
     };
 
     OutputArea.prototype._record_display_id = function (json, element) {
@@ -650,30 +677,35 @@ define([
     OutputArea.safe_outputs[MIME_LATEX] = true;
     OutputArea.safe_outputs[MIME_PNG] = true;
     OutputArea.safe_outputs[MIME_JPEG] = true;
+    OutputArea.safe_outputs[MIME_GIF] = true;
 
     OutputArea.prototype.append_mime_type = function (json, element, handle_inserted) {
         for (var i=0; i < OutputArea.display_order.length; i++) {
             var type = OutputArea.display_order[i];
             var append = OutputArea.append_map[type];
             if ((json.data[type] !== undefined) && append) {
+                var md = json.metadata || {};
                 var value = json.data[type];
+                var toinsert;
                 if (!this.trusted && !OutputArea.safe_outputs[type]) {
                     // not trusted, sanitize HTML
                     if (type===MIME_HTML || type==='text/svg') {
-                        value = security.sanitize_html(value);
+                        var parsed = $(security.sanitize_html_and_parse(value));
+                        toinsert = append.apply(this, [parsed, md, element, handle_inserted]);
                     } else {
                         // don't display if we don't know how to sanitize it
                         console.log("Ignoring untrusted " + type + " output.");
                         continue;
                     }
+                } else {
+                    toinsert = append.apply(this, [value, md, element, handle_inserted]);
                 }
-                var md = json.metadata || {};
-                var toinsert = append.apply(this, [value, md, element, handle_inserted]);
+
                 // Since only the png and jpeg mime types call the inserted
                 // callback, if the mime type is something other we must call the 
                 // inserted callback only when the element is actually inserted
                 // into the DOM.  Use a timeout of 0 to do this.
-                if ([MIME_PNG, MIME_JPEG].indexOf(type) < 0 && handle_inserted !== undefined) {
+                if ([MIME_PNG, MIME_JPEG, MIME_GIF].indexOf(type) < 0 && handle_inserted !== undefined) {
                     setTimeout(handle_inserted, 0);
                 }
                 this.events.trigger('output_appended.OutputArea', [type, value, md, toinsert]);
@@ -695,14 +727,13 @@ define([
     };
 
 
-    var append_markdown = function(markdown, md, element) {
+    var append_markdown = function(text, md, element) {
         var type = MIME_MARKDOWN;
         var toinsert = this.create_output_subarea(md, "output_markdown rendered_html", type);
-        var text_and_math = mathjaxutils.remove_math(markdown);
-        var text = text_and_math[0];
-        var math = text_and_math[1];
-        marked(text, function (err, html) {
-            html = mathjaxutils.replace_math(html, math);
+        markdown.render(text, {
+            with_math: true,
+            clean_tables: true
+        }, function (err, html) {
             toinsert.append(html);
         });
         dblclick_to_reset_size(toinsert.find('img'));
@@ -802,41 +833,34 @@ define([
         }
     };
     
-    var append_png = function (png, md, element, handle_inserted) {
-        var type = MIME_PNG;
-        var toinsert = this.create_output_subarea(md, "output_png", type);
+    OutputArea.prototype._append_img = function (src_type, md, element, handle_inserted, MIME, type_string) {
+        var type = MIME;
+        var toinsert = this.create_output_subarea(md, 'output_' + type_string, type);
         var img = $("<img/>");
         if (handle_inserted !== undefined) {
             img.on('load', function(){
                 handle_inserted(img);
             });
         }
-        img[0].src = 'data:image/png;base64,'+ png;
-        set_width_height(img, md, MIME_PNG);
+        img[0].src = 'data:image/' + type_string + ';base64,'+ src_type;
+        set_width_height(img, md, type);
         dblclick_to_reset_size(img);
         toinsert.append(img);
         element.append(toinsert);
         return toinsert;
     };
-
+    
+    var append_png = function (png, md, element, handle_inserted) {
+        return this._append_img(png, md, element, handle_inserted, MIME_PNG, 'png');
+    };
 
     var append_jpeg = function (jpeg, md, element, handle_inserted) {
-        var type = MIME_JPEG;
-        var toinsert = this.create_output_subarea(md, "output_jpeg", type);
-        var img = $("<img/>");
-        if (handle_inserted !== undefined) {
-            img.on('load', function(){
-                handle_inserted(img);
-            });
-        }
-        img[0].src = 'data:image/jpeg;base64,'+ jpeg;
-        set_width_height(img, md, MIME_JPEG);
-        dblclick_to_reset_size(img);
-        toinsert.append(img);
-        element.append(toinsert);
-        return toinsert;
+        return this._append_img(jpeg, md, element, handle_inserted, MIME_JPEG, 'jpeg');
     };
-
+    
+    var append_gif = function (gif, md, element, handle_inserted) {
+        return this._append_img(gif, md, element, handle_inserted, MIME_GIF, 'gif');
+    };
 
     var append_pdf = function (pdf, md, element) {
         var type = MIME_PDF;
@@ -894,6 +918,7 @@ define([
                     })
                 )
             )
+            .attr("dir","auto")
         );
         
         this.element.append(area);
@@ -956,7 +981,8 @@ define([
             // Fix the output div's height if the clear_output is waiting for
             // new output (it is being used in an animation).
             if (!ignore_clear_queue && this.clear_queued) {
-                var height = this.element.height();
+                // this.element.height() rounds the height, so we get the exact value
+                var height = this.element[0].getBoundingClientRect().height;
                 this.element.height(height);
                 this.clear_queued = false;
             }
@@ -1062,6 +1088,7 @@ define([
         MIME_SVG,
         MIME_PNG,
         MIME_JPEG,
+        MIME_GIF,
         MIME_PDF,
         MIME_TEXT
     ];
@@ -1073,6 +1100,7 @@ define([
     OutputArea.append_map[MIME_SVG] = append_svg;
     OutputArea.append_map[MIME_PNG] = append_png;
     OutputArea.append_map[MIME_JPEG] = append_jpeg;
+    OutputArea.append_map[MIME_GIF] = append_gif;
     OutputArea.append_map[MIME_LATEX] = append_latex;
     OutputArea.append_map[MIME_JAVASCRIPT] = append_javascript;
     OutputArea.append_map[MIME_PDF] = append_pdf;

@@ -22,8 +22,8 @@ Jupyter applications, from the Notebook to JupyterHub to nbgrader, share a
 common configuration system. The process for creating a configuration file
 and editing settings is similar for all the Jupyter applications.
 
-    - `Jupyter’s Common Configuration Approach <https://jupyter.readthedocs.io/en/latest/projects/config.html>`_
-    - `Common Directories and File Locations <https://jupyter.readthedocs.io/en/latest/projects/jupyter-directories.html>`_
+    - `Jupyter’s Common Configuration Approach <https://jupyter.readthedocs.io/en/latest/use/config.html>`_
+    - `Common Directories and File Locations <https://jupyter.readthedocs.io/en/latest/use/jupyter-directories.html>`_
     - `Language kernels <https://jupyter.readthedocs.io/en/latest/projects/kernels.html>`_
     - `traitlets <https://traitlets.readthedocs.io/en/latest/config.html#module-traitlets.config>`_
       provide a low-level architecture for configuration.
@@ -47,19 +47,18 @@ front-end Notebook client (i.e. the familiar notebook interface).
         documented in the configuration file and the user documentation.
 
   - :ref:`Running a Notebook server <working_remotely>`
-  - Related: `Configuring a language kernel <https://jupyter.readthedocs.io/en/latest/install.html#installing-kernels>`_
+  - Related: `Configuring a language kernel <https://jupyter.readthedocs.io/en/latest/install-kernel.html>`_
     to run in the Notebook server enables your server to run other languages, like R or Julia.
 
 .. _configure_nbclient:
 
 Notebook front-end client
 -------------------------
-- :ref:`How front-end configuration works <frontend_config>`
-    * :ref:`Example: Changing the notebook's default indentation setting
-      <frontend_config>`
-    * :ref:`Example: Restoring the notebook's default indentation setting
-      <frontend_config>`
-- :ref:`Persisting configuration settings <frontend_config>`
+
+.. toctree::
+   :maxdepth: 2
+
+   frontend_config
 
 .. _configure_nbextensions:
 

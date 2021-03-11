@@ -14,7 +14,7 @@ General Guidelines
 For general documentation about contributing to Jupyter projects, see the
 `Project Jupyter Contributor Documentation`__.
 
-__ https://jupyter.readthedocs.io/en/latest/contributor/content-contributor.html
+__ https://jupyter.readthedocs.io/en/latest/contributing/content-contributor.html
 
 
 Setting Up a Development Environment
@@ -32,7 +32,7 @@ If you use ``conda``, you can get them with::
 
     conda install -c conda-forge nodejs
 
-If you use `Homebrew <http://brew.sh/>`_ on Mac OS X::
+If you use `Homebrew <https://brew.sh/>`_ on Mac OS X::
 
     brew install node
 
@@ -61,6 +61,33 @@ from any directory in your system with::
 
     jupyter notebook
 
+Verification
+^^^^^^^^^^^^
+
+While running the notebook, select one of your notebook files (the file will have the extension ``.ipynb``).
+In the top tab you will click on "Help" and then click on "About". In the pop window you will see information about the version of Jupyter that you are running. You will see "The version of the notebook server is:".
+If you are working in development mode, you will see that your version of Jupyter notebook will include the word "dev".
+
+.. image:: ./docs/source/_static/images/jupyter-verification.png
+   :width: 40pt
+
+If it does not include the word "dev", you are currently not working in development mode and should follow the steps below to uninstall and reinstall Jupyter.
+
+Troubleshooting the Installation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you do not see that your Jupyter Notebook is not running on dev mode, it's possible that you are
+running other instances of Jupyter Notebook. You can try the following steps:
+
+1. Uninstall all instances of the notebook package. These include any installations you made using
+   pip or conda.
+2. Run ``python3 -m pip install -e .`` in the notebook repository to install the notebook from there.
+3. Run ``npm run build`` to make sure the Javascript and CSS are updated and compiled.
+4. Launch with ``python3 -m notebook --port 8989``, and check that the browser is pointing to ``localhost:8989``
+   (rather than the default 8888). You don't necessarily have to launch with port 8989, as long as you use
+   a port that is neither the default nor in use, then it should be fine.
+5. Verify the installation with the steps in the previous section.
+
 
 Rebuilding JavaScript and CSS
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -71,16 +98,16 @@ this command whenever there are changes to JavaScript or LESS sources::
 
     npm run build
 
-**IMPORTANT:** Don't forget to run ``npm run build`` after switching branches. 
-When switching between branches of different versions (e.g. ``4.x`` and 
-``master``), run ``pip install -e .``. If you have tried the above and still 
+**IMPORTANT:** Don't forget to run ``npm run build`` after switching branches.
+When switching between branches of different versions (e.g. ``4.x`` and
+``master``), run ``pip install -e .``. If you have tried the above and still
 find that the notebook is not reflecting the current source code, try cleaning
 the repo with ``git clean -xfd`` and reinstalling with ``pip install -e .``.
 
 Development Tip
 """""""""""""""
 
-When doing development, you can use this command to automatically rebuild 
+When doing development, you can use this command to automatically rebuild
 JavaScript and LESS sources as they are modified::
 
     npm run build:watch
@@ -89,7 +116,7 @@ Git Hooks
 """""""""
 
 If you want to automatically update dependencies and recompile JavaScript and
-CSS after checking out a new commit, you can install post-checkout and 
+CSS after checking out a new commit, you can install post-checkout and
 post-merge hooks which will do it for you::
 
     git-hooks/install-hooks.sh
@@ -105,15 +132,15 @@ Python Tests
 
 Install dependencies::
 
-    pip install -e .[test]
+    pip install -e '.[test]'
 
 To run the Python tests, use::
 
-    nosetests
+    pytest
 
 If you want coverage statistics as well, you can run::
 
-    nosetests --with-coverage --cover-package=notebook notebook
+    py.test --cov notebook -v --pyargs notebook
 
 JavaScript Tests
 ^^^^^^^^^^^^^^^^
@@ -144,19 +171,17 @@ Building the Documentation
 To build the documentation you'll need `Sphinx <http://www.sphinx-doc.org/>`_,
 `pandoc <http://pandoc.org/>`_ and a few other packages.
 
-To install (and activate) a `conda environment`_ named ``notebook_docs``
+To install (and activate) a conda environment named ``notebook_docs``
 containing all the necessary packages (except pandoc), use::
 
-    conda env create -f docs/environment.yml
-    source activate notebook_docs  # Linux and OS X
-    activate notebook_docs         # Windows
+    conda create -n notebook_docs pip
+    conda activate notebook_docs  # Linux and OS X
+    activate notebook_docs        # Windows
+    pip install .[docs]
 
-.. _conda environment:
-    http://conda.pydata.org/docs/using/envs.html#use-environment-from-file
+If you want to install the necessary packages with ``pip``, use the following instead::
 
-If you want to install the necessary packages with ``pip`` instead::
-
-    pip install -r docs/doc-requirements.txt
+    pip install .[docs]
 
 Once you have installed the required packages, you can build the docs with::
 
@@ -174,4 +199,4 @@ Windows users can find ``make.bat`` in the ``docs`` folder.
 
 You should also have a look at the `Project Jupyter Documentation Guide`__.
 
-__ https://jupyter.readthedocs.io/en/latest/contrib_docs/index.html
+__ https://jupyter.readthedocs.io/en/latest/contributing/docs-contributions/index.html

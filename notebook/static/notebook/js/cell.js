@@ -12,12 +12,13 @@
 define([
     'jquery',
     'base/js/utils',
+    'base/js/i18n',
     'codemirror/lib/codemirror',
     'codemirror/addon/edit/matchbrackets',
     'codemirror/addon/edit/closebrackets',
     'codemirror/addon/comment/comment',
     'services/config',
-], function($, utils, CodeMirror, cm_match, cm_closeb, cm_comment, configmod) {
+], function($, utils, i18n, CodeMirror, cm_match, cm_closeb, cm_comment, configmod) {
     "use strict";
     
     var overlayHack = CodeMirror.scrollbarModel.native.prototype.overlayHack;
@@ -75,7 +76,7 @@ define([
         // backward compat.
         Object.defineProperty(this, 'cm_config', {
             get: function() {
-                console.warn("Warning: accessing Cell.cm_config directly is deprecated.");
+                console.warn(i18n.msg._("Warning: accessing Cell.cm_config directly is deprecated."));
                 return that._options.cm_config;
             },
         });
@@ -133,8 +134,6 @@ define([
                 "Cmd-Left": "goLineLeft",
                 "Tab": "indentMore",
                 "Shift-Tab" : "indentLess",
-                "Cmd-Alt-[" : "indentAuto",
-                "Ctrl-Alt-[" : "indentAuto",
                 "Cmd-/" : "toggleComment",
                 "Ctrl-/" : "toggleComment",
             }
@@ -468,14 +467,14 @@ define([
     };
 
     /**
-     * should be overritten by subclass
+     * should be overwritten by subclass
      * @method get_text
      */
     Cell.prototype.get_text = function () {
     };
 
     /**
-     * should be overritten by subclass
+     * should be overwritten by subclass
      * @method set_text
      * @param {string} text
      */
@@ -483,7 +482,7 @@ define([
     };
 
     /**
-     * should be overritten by subclass
+     * should be overwritten by subclass
      * serialise cell to json.
      * @method toJSON
      **/
@@ -491,6 +490,9 @@ define([
         var data = {};
         // deepcopy the metadata so copied cells don't share the same object
         data.metadata = JSON.parse(JSON.stringify(this.metadata));
+        if (this.id !== undefined) {
+            data.id = this.id;
+        }
         if (data.metadata.deletable) {
             delete data.metadata.deletable;
         }
@@ -505,12 +507,15 @@ define([
     };
 
     /**
-     * should be overritten by subclass
+     * should be overwritten by subclass
      * @method fromJSON
      **/
     Cell.prototype.fromJSON = function (data) {
         if (data.metadata !== undefined) {
             this.metadata = data.metadata;
+        }
+        if (data.id !== undefined) {
+            this.id = data.id;
         }
     };
 
@@ -585,6 +590,52 @@ define([
         var text = this.code_mirror.getRange(cursor, end);
         text = text.replace(/^\n+/, '').replace(/\n+$/, '');
         return text;
+    };
+
+
+    /**
+     * @return {Array} - the text between cursors and within selections (multicursor/sorted)
+     * @method get_split_text
+     **/
+    Cell.prototype.get_split_text = function () {
+        var ranges = this.code_mirror.listSelections();
+
+        var cursors = [{line: 0, ch: 0}];
+
+        for (var i = 0; i < ranges.length; i++) {
+            // append both to handle selections
+            if (ranges[i].head.sticky == 'before') {
+                cursors.push(ranges[i].anchor);
+                cursors.push(ranges[i].head);
+            } else {
+                cursors.push(ranges[i].head);
+                cursors.push(ranges[i].anchor);
+            }
+        }
+
+        var last_line_num = this.code_mirror.lineCount()-1;
+        var last_line_len = this.code_mirror.getLine(last_line_num).length;
+        var end = {line:last_line_num, ch:last_line_len};
+        cursors.push(end);
+
+        // Cursors is now sorted, but likely has duplicates due to anchor and head being the same for cursors
+        var locations = [cursors[0]];
+        for (var i = 1; i < cursors.length; i++) {
+            var last = locations[locations.length-1];
+            var current = cursors[i];
+            if ((last.line != current.line) || (last.ch != current.ch)) {
+                locations.push(cursors[i]);
+            }
+        }
+
+        // Split text
+        var text_list = [];
+        for (var i = 1; i < locations.length; i++) {
+            var text = this.code_mirror.getRange(locations[i-1], locations[i]);
+            text = text.replace(/^\n+/, '').replace(/\n+$/, ''); // removes newlines at beginning and end
+            text_list.push(text);
+        }
+        return text_list;
     };
 
     /**
@@ -759,7 +810,7 @@ define([
         } else {
             data.metadata = this.metadata;
         }
-        this.element.find('.inner_cell').find("a").text("Unrecognized cell type: " + data.cell_type);
+        this.element.find('.inner_cell').find("a").text(i18n.msg.sprintf(i18n.msg._("Unrecognized cell type: %s"), data.cell_type));
     };
     
     UnrecognizedCell.prototype.create_element = function () {
@@ -773,7 +824,7 @@ define([
         inner_cell.append(
             $("<a>")
                 .attr("href", "#")
-                .text("Unrecognized cell type")
+                .text(i18n.msg._("Unrecognized cell type"))
         );
         cell.append(inner_cell);
         this.element = cell;

@@ -1,7 +1,7 @@
 // Copyright (c) Jupyter Development Team.
 // Distributed under the terms of the Modified BSD License.
 
-require([
+requirejs([
     'jquery',
     'contents',
     'base/js/namespace',
@@ -13,6 +13,8 @@ require([
     'edit/js/menubar',
     'edit/js/savewidget',
     'edit/js/notificationarea',
+    'bidi/bidi',
+    'auth/js/loginwidget', 
 ], function(
     $,
     contents_service,
@@ -24,12 +26,15 @@ require([
     editmod,
     menubar,
     savewidget,
-    notificationarea
+    notificationarea,
+    bidi,
+    loginwidget,
     ){
     "use strict";
 
     try {
         requirejs(['custom/custom'], function() {});
+        bidi.loadLocale();
     } catch(err) {
         console.log("Error loading custom.js from edition service. Continuing and logging");
         console.warn(err);
@@ -39,6 +44,10 @@ require([
 
     var base_url = utils.get_body_data('baseUrl');
     var file_path = utils.get_body_data('filePath');
+    // This enables logout
+    var login_widget = new loginwidget.LoginWidget('#login_widget', {
+        base_url: base_url
+    });
     var config = new configmod.ConfigSection('edit', {base_url: base_url});
     config.load();
     var common_config = new configmod.ConfigSection('common', {base_url: base_url});
@@ -89,7 +98,7 @@ require([
         }
     };
 
-    // Make sure the codemirror editor is sized appropriatley.
+    // Make sure the codemirror editor is sized appropriately.
     var _handle_resize = function() {
         var backdrop = $("#texteditor-backdrop");
 

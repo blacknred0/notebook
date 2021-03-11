@@ -15,27 +15,28 @@ var rjs_config = {
   paths: {
     underscore : 'components/underscore/underscore-min',
     backbone : 'components/backbone/backbone-min',
+    jed: 'components/jed/jed',
     jquery: 'components/jquery/jquery.min',
-    bootstrap: 'components/bootstrap/js/bootstrap.min',
+    json: 'components/requirejs-plugins/src/json',
+    text: 'components/requirejs-text/text',
+    bootstrap: 'components/bootstrap/dist/js/bootstrap.min',
     bootstraptour: 'components/bootstrap-tour/build/js/bootstrap-tour.min',
-    "jquery-ui": 'components/jquery-ui/ui/minified/jquery-ui.min',
-    moment: 'components/moment/moment',
+    "jquery-ui": 'components/jquery-ui/jquery-ui.min',
+    moment: 'components/moment/min/moment-with-locales',
     codemirror: 'components/codemirror',
-    xterm: 'components/xterm.js/dist/xterm',
-    typeahead: 'components/jquery-typeahead/dist/jquery.typeahead',
+    xterm: 'components/xterm.js/index',
+    "xtermjs-fit": 'components/xterm.js-fit/index',
+    "jquery-typeahead": 'components/jquery-typeahead/dist/jquery.typeahead.min',
     contents: 'empty:',
     custom: 'empty:',
   },
   map: { // for backward compatibility
     "*": {
         "jqueryui": "jquery-ui",
+        "typeahead": "jquery-typeahead"
     }
   },
   shim: {
-    typeahead: {
-            deps: ["jquery"],
-            exports: "typeahead"
-          },
     underscore: {
       exports: '_'
     },

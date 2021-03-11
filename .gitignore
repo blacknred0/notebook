@@ -6,6 +6,8 @@ docs/man/*.gz
 docs/source/api/generated
 docs/source/config.rst
 docs/gh-pages
+notebook/i18n/*/LC_MESSAGES/*.mo
+notebook/i18n/*/LC_MESSAGES/nbjs.json
 notebook/static/components
 notebook/static/style/*.min.css*
 notebook/static/*/js/built/
@@ -25,6 +27,7 @@ __pycache__
 \#*#
 .#*
 .coverage
+.pytest_cache
 src
 
 *.swp
@@ -32,4 +35,19 @@ src
 .idea/
 Read the Docs
 config.rst
+*.iml
+/.project
+/.pydevproject
 
+package-lock.json
+geckodriver.log
+*.iml
+
+# jetbrains IDE stuff
+*.iml
+.idea/
+
+# ms IDE stuff
+*.code-workspace
+.history
+.vscode

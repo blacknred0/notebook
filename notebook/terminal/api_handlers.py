@@ -1,44 +1,32 @@
 import json
 from tornado import web, gen
-from ..base.handlers import APIHandler, json_errors
-from ..utils import url_path_join
+from ..base.handlers import APIHandler
+
 
 class TerminalRootHandler(APIHandler):
-    @json_errors
     @web.authenticated
     def get(self):
-        tm = self.terminal_manager
-        terms = [{'name': name} for name in tm.terminals]
-        self.finish(json.dumps(terms))
+        models = self.terminal_manager.list()
+        self.finish(json.dumps(models))
 
-    @json_errors
     @web.authenticated
     def post(self):
         """POST /terminals creates a new terminal and redirects to it"""
-        name, _ = self.terminal_manager.new_named_terminal()
-        self.finish(json.dumps({'name': name}))
+        model = self.terminal_manager.create()
+        self.finish(json.dumps(model))
 
 
 class TerminalHandler(APIHandler):
     SUPPORTED_METHODS = ('GET', 'DELETE')
 
-    @json_errors
     @web.authenticated
     def get(self, name):
-        tm = self.terminal_manager
-        if name in tm.terminals:
-            self.finish(json.dumps({'name': name}))
-        else:
-            raise web.HTTPError(404, "Terminal not found: %r" % name)
+        model = self.terminal_manager.get(name)
+        self.finish(json.dumps(model))
 
-    @json_errors
     @web.authenticated
     @gen.coroutine
     def delete(self, name):
-        tm = self.terminal_manager
-        if name in tm.terminals:
-            yield tm.terminate(name, force=True)
-            self.set_status(204)
-            self.finish()
-        else:
-            raise web.HTTPError(404, "Terminal not found: %r" % name)
+        yield self.terminal_manager.terminate(name, force=True)
+        self.set_status(204)
+        self.finish()

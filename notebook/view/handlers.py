@@ -1,4 +1,3 @@
-#encoding: utf-8
 """Tornado handlers for viewing HTML files."""
 
 # Copyright (c) Jupyter Development Team.
@@ -17,7 +16,7 @@ class ViewHandler(IPythonHandler):
             raise web.HTTPError(404, u'File does not exist: %s' % path)
 
         basename = path.rsplit('/', 1)[-1]
-        file_url = url_path_join(self.base_url, 'files', path)
+        file_url = url_path_join(self.base_url, 'files', url_escape(path))
         self.write(
             self.render_template('view.html', file_url=file_url, page_title=basename)
         )

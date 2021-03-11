@@ -4,7 +4,8 @@
 define([
     'jquery',
     'base/js/utils',
-], function($, utils) {
+    'base/js/i18n'
+], function($, utils, i18n) {
     "use strict";
 
     // tooltip constructor
@@ -36,16 +37,16 @@ define([
 
         // build the buttons menu on the upper right
         // expand the tooltip to see more
-        var expandlink = $('<a/>').attr('href', "#").addClass("ui-corner-all") //rounded corner
-        .attr('role', "button").attr('id', 'expanbutton').attr('title', 'Grow the tooltip vertically (press shift-tab twice)').click(function () {
+        var expandlink = $('<a/>').attr('href', "#").attr('role', "button").addClass('ui-button')
+        .attr('id', 'expanbutton').attr('title', i18n.msg._('Grow the tooltip vertically (press shift-tab twice)')).click(function () {
             that.expand();
             event.preventDefault();
         }).append(
         $('<span/>').text('Expand').addClass('ui-icon').addClass('ui-icon-plus'));
 
         // open in pager
-        var morelink = $('<a/>').attr('href', "#").attr('role', "button").addClass('ui-button').attr('title', 'show the current docstring in pager (press shift-tab 4 times)');
-        var morespan = $('<span/>').text('Open in Pager').addClass('ui-icon').addClass('ui-icon-arrowstop-l-n');
+        var morelink = $('<a/>').attr('href', "#").attr('role', "button").addClass('ui-button').attr('title', i18n.msg._('show the current docstring in pager (press shift-tab 4 times)'));
+        var morespan = $('<span/>').text(i18n.msg._('Open in Pager')).addClass('ui-icon').addClass('ui-icon-arrowstop-l-n');
         morelink.append(morespan);
         morelink.click(function () {
             that.showInPager(that._old_cell);
@@ -54,7 +55,7 @@ define([
 
         // close the tooltip
         var closelink = $('<a/>').attr('href', "#").attr('role', "button").addClass('ui-button');
-        var closespan = $('<span/>').text('Close').addClass('ui-icon').addClass('ui-icon-close');
+        var closespan = $('<span/>').text(i18n.msg._('Close')).addClass('ui-icon').addClass('ui-icon-close');
         closelink.append(closespan);
         closelink.click(function () {
             that.remove_and_cancel_tooltip(true);
@@ -64,8 +65,8 @@ define([
         this._clocklink = $('<a/>').attr('href', "#");
         this._clocklink.attr('role', "button");
         this._clocklink.addClass('ui-button');
-        this._clocklink.attr('title', 'Tooltip will linger for 10 seconds while you type');
-        var clockspan = $('<span/>').text('Close');
+        this._clocklink.attr('title', i18n.msg._('Tooltip will linger for 10 seconds while you type'));
+        var clockspan = $('<span/>').text(i18n.msg._('Close'));
         clockspan.addClass('ui-icon');
         clockspan.addClass('ui-icon-clock');
         this._clocklink.append(clockspan);
@@ -126,7 +127,7 @@ define([
         this.remove_and_cancel_tooltip();
     };
 
-    // grow the tooltip verticaly
+    // grow the tooltip vertically
     Tooltip.prototype.expand = function () {
         this.text.removeClass('smalltooltip');
         this.text.addClass('bigtooltip');
@@ -134,7 +135,7 @@ define([
     };
 
     // deal with all the logic of hiding the tooltip
-    // and reset it's status
+    // and reset its status
     Tooltip.prototype._hide = function () {
         this._hidden = true;
         this.tooltip.fadeOut('fast');
@@ -201,8 +202,8 @@ define([
         this.cancel_pending();
         var editor = cell.code_mirror;
         var cursor = editor.getCursor();
-        var cursor_pos = editor.indexFromPos(cursor);
         var text = cell.get_text();
+        var cursor_pos = utils.js_idx_to_char_idx(editor.indexFromPos(cursor), text);
 
         this._hide_if_no_docstring = hide_if_no_docstring;
 
@@ -242,10 +243,10 @@ define([
         this._sticky = false;
     };
 
-    // put the tooltip in a sicky state for 10 seconds
-    // it won't be removed by remove_and_cancell() unless you called with
+    // put the tooltip in a sticky state for 10 seconds
+    // it won't be removed by remove_and_cancel() unless you called with
     // the first parameter set to true.
-    // remove_and_cancell_tooltip(true)
+    // remove_and_cancel_tooltip(true)
     Tooltip.prototype.stick = function (time) {
         time = (time !== undefined) ? time : 10;
         var that = this;
